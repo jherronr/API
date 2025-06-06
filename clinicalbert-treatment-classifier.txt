@@ -1,0 +1,224 @@
+import os
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy.stats import chi2_contingency
+from scipy.stats import f_oneway, kruskal
+
+from transformers import AutoTokenizer
+import torch
+from torch.utils.data import Dataset
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from torch.utils.data import DataLoader
+import torch.nn as nn
+from transformers import AutoModel
+from transformers import get_scheduler
+from torch.optim import AdamW
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import confusion_matrix, classification_report
+from transformers import BertForSequenceClassification
+
+def build_input_text(row):
+    return f"Condition: {row['Condition']}. Clinical note: {row['Clinical Note']}"
+
+## Preprocesamiento
+
+label_enc = LabelEncoder()
+df_mod['label'] = label_enc.fit_transform(df_mod['Treatment'])
+df_mod.head()
+
+tokenizer = AutoTokenizer.from_pretrained("emilyalsentzer/Bio_ClinicalBERT") 
+MAX_LEN = 50
+
+class ClinicalNoteDataset(Dataset):
+    def __init__(self, texts, labels, tokenizer, max_len):
+        self.texts = texts
+        self.labels = labels
+        self.tokenizer = tokenizer
+        self.max_len = max_len
+
+    def __len__(self):
+        return len(self.texts) # Devuelve el número total de muestras
+
+    def __getitem__(self, idx):
+        text = str(self.texts[idx])
+        label = self.labels[idx]
+
+        encoding = self.tokenizer(
+            text,
+            add_special_tokens=True,
+            max_length=self.max_len,
+            return_token_type_ids=False,
+            padding='max_length',
+            truncation=True,
+            return_attention_mask=True,
+            return_tensors='pt'
+        )
+
+        return {
+            'input_ids': encoding['input_ids'].flatten(),
+            'attention_mask': encoding['attention_mask'].flatten(),
+            'label': torch.tensor(label, dtype=torch.long)
+        }
+
+X = df_mod['input_text'].tolist()
+y = df_mod['label'].tolist()
+
+X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=0.3, stratify=y, random_state=42) # stratify asegura que la distribución de clases se mantenga en cada subconjunto.
+X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, stratify=y_temp, random_state=42)
+BATCH_SIZE = 16
+train_dataset = ClinicalNoteDataset(X_train, y_train, tokenizer, MAX_LEN)
+val_dataset = ClinicalNoteDataset(X_val, y_val, tokenizer, MAX_LEN)
+test_dataset = ClinicalNoteDataset(X_test, y_test, tokenizer, MAX_LEN)
+
+train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE)
+test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE)
+class ClinicalBERTClassifier(nn.Module):
+    def __init__(self, n_classes):
+        super(ClinicalBERTClassifier, self).__init__()
+        self.bert = AutoModel.from_pretrained("emilyalsentzer/Bio_ClinicalBERT")
+        self.dropout = nn.Dropout(p=0.3)
+        self.out = nn.Linear(self.bert.config.hidden_size, n_classes)
+
+    def forward(self, input_ids, attention_mask):
+        outputs = self.bert(
+            input_ids=input_ids,
+            attention_mask=attention_mask
+        )
+        pooled_output = outputs.pooler_output  # [CLS] token
+        output = self.dropout(pooled_output)
+        return self.out(output)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(device)
+
+model = BertForSequenceClassification.from_pretrained(
+    "emilyalsentzer/Bio_ClinicalBERT",
+    num_labels=len(label_enc.classes_),
+    problem_type="single_label_classification"
+)
+model = model.to(device)
+optimizer = AdamW(model.parameters(), lr=2e-5)
+criterion = nn.CrossEntropyLoss()
+EPOCHS = 5
+num_training_steps = len(train_loader) * EPOCHS
+lr_scheduler = get_scheduler(
+    name="linear",
+    optimizer=optimizer,
+    num_warmup_steps=0,
+    num_training_steps=num_training_steps,
+)
+def train_epoch(model, data_loader, optimizer, criterion, scheduler, device):
+    model.train()
+    total_loss = 0
+    true_labels, pred_labels = [], []
+
+    for batch in data_loader:
+        input_ids = batch['input_ids'].to(device)
+        attention_mask = batch['attention_mask'].to(device)
+        labels = batch['label'].to(device)
+
+        outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+        logits = outputs.logits
+        loss = criterion(logits, labels)
+        _, preds = torch.max(logits, dim=1)
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        scheduler.step()
+
+        total_loss += loss.item()
+        true_labels.extend(labels.cpu().numpy())
+        pred_labels.extend(preds.cpu().numpy())
+
+    acc = accuracy_score(true_labels, pred_labels)
+    return total_loss / len(data_loader), acc
+    def eval_model(model, data_loader, criterion, device):
+    model.eval()
+    total_loss = 0
+    true_labels, pred_labels = [], []
+
+    with torch.no_grad():
+        for batch in data_loader:
+            input_ids = batch['input_ids'].to(device)
+            attention_mask = batch['attention_mask'].to(device)
+            labels = batch['label'].to(device)
+
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+            logits = outputs.logits
+            loss = criterion(logits, labels)
+            _, preds = torch.max(logits, dim=1)
+
+            total_loss += loss.item()
+            true_labels.extend(labels.cpu().numpy())
+            pred_labels.extend(preds.cpu().numpy())
+
+    acc = accuracy_score(true_labels, pred_labels)
+    return total_loss / len(data_loader), acc
+    best_acc = 0
+best_model_path = 'best_clinicalbert_model.pth'
+for epoch in range(EPOCHS):
+    print(f'\n--- Epoch {epoch + 1}/{EPOCHS} ---')
+    
+    train_loss, train_acc = train_epoch(model, train_loader, optimizer, criterion, lr_scheduler, device)
+    val_loss, val_acc = eval_model(model, val_loader, criterion, device)
+
+    print(f'Train loss: {train_loss:.4f} | Train acc: {train_acc:.4f}')
+    print(f'Val loss:   {val_loss:.4f} | Val acc:   {val_acc:.4f}')
+
+    if val_acc > best_acc:
+        best_acc = val_acc
+        torch.save(model.state_dict(), best_model_path)
+        print(f"✅ Nuevo mejor modelo guardado con Accuracy = {best_acc:.4f}")
+model.load_state_dict(torch.load('best_clinicalbert_model.pth'))
+model = model.to(device)
+
+model.save_pretrained("clinicalbert-treatment-classifier")
+tokenizer.save_pretrained("clinicalbert-treatment-classifier")
+
+def test_model(model, data_loader, device):
+    model.eval()
+    true_labels, pred_labels = [], []
+
+    with torch.no_grad():
+        for batch in data_loader:
+            input_ids = batch['input_ids'].to(device)
+            attention_mask = batch['attention_mask'].to(device)
+            labels = batch['label'].to(device)
+
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+            logits = outputs.logits  # ← CORRECCIÓN CLAVE
+            _, preds = torch.max(logits, dim=1)
+
+            true_labels.extend(labels.cpu().numpy())
+            pred_labels.extend(preds.cpu().numpy())
+
+    acc = accuracy_score(true_labels, pred_labels)
+    return true_labels, pred_labels, acc
+
+y_true, y_pred, test_acc = test_model(model, test_loader, device)
+print(f"\n📊 Accuracy en el test set: {test_acc:.4f}")
+
+## Guardad en HuggingFace
+from huggingface_hub import notebook_login
+from huggingface_hub import create_repo
+from huggingface_hub import upload_folder
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+notebook_login()
+
+repo_id = "jherronr/clinicalbert-treatment-classifier"  
+
+upload_folder(
+    folder_path="clinicalbert-treatment-classifier",
+    repo_id=repo_id,
+    repo_type="model",
+    allow_patterns="*"
+)
+from transformers import pipeline
+
+clf = pipeline("text-classification", model=repo_id, tokenizer=repo_id)
+text = "Condition: Brain Glioma. Clinical note: Patient has experienced seizures and blurry vision."
+print(clf(text))

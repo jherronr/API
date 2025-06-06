@@ -1,0 +1,59 @@
+PROCESO DE SELECCIÓN ESPECIALISTA DE ANALÍTICA E INTELIGENCIA ARTIFICIAL PARA BIOCIENCIAS
+
+Introducción
+La medicina personalizada se fundamenta en principios del entendimiento global del paciente a través de diferentes fuentes de información; los datos genéticos pueden generar una caracterización individual, para guiar las decisiones clínicas en función de la prevención, el diagnóstico temprano y el tratamiento de la enfermedad. Modalidades como las imágenes diagnósticas, exámenes de laboratorio, pruebas genómicas e historia clínica; permiten a demás tener una visión detallada del estado de salud del paciente y su evolución en el tiempo. 
+Este enfoque de la medicina para la prestación de servicios en salud, así como para el desarrollo de investigaciones sobre poblaciones de interés; genera un panorama muy prometedor en el impacto que se puede generar a partir del uso integrado de los datos. Sin embargo, presenta un gran reto tecnológico para su implementación, en términos de infraestructura, seguridad, interoperabilidad, costos, entre otros.
+
+1.	Contexto
+La determinación del tratamiento más adecuado para un paciente que padece de cáncer de cerebro es un proceso que debe integrar información de múltiples fuentes, como imágenes médicas, historia clínica, exámenes de laboratorio y pruebas genómicas. La inteligencia artificial, además de permitir el procesamiento de grandes volúmenes de datos, permite combinar información multimodal para identificar la terapia que pueda tener los mejores resultados para el paciente
+2.	Insumos de la prueba 
+Datos: Para este ejercicio se usará un dataset de imágenes de resonancia magnética (MRI), que tiene etiquetas para tres clases de tumores:
+-	Glioma (Brain_Glioma)
+-	Meningioma (Brain_Menin)
+-	Otros tumores (Brain Tumor)
+Disponible en este link:  https://www.kaggle.com/datasets/orvile/brain-cancer-mri-dataset
+Adicionalmente se adjunta a la prueba un dataset de datos sintéticos para complementar la información de las imágenes con las siguientes variables:
+- Case ID: El id del caso que corresponde con el nombre del archivo de la imagen
+- Condition: La etiqueta de la clase de tumor para las imágenes
+- Age: Edad del paciente en años
+- Sex: Masculino/Femenino (o "M"/"F")
+- Clinical Note: Texto narrativo tipo historia clínica, donde se describen los síntomas del paciente,  Así como la duración y severidad de los síntomas. 
+- Treatment: Cirugía, radioterapia, quimioterapia o seguimiento cercano
+3.	 Planteamiento del problema
+Con los datos suministrados debe plantear dos modelos:
+1.	Clasificación del tipo de tumor: Empleando únicamente los datos de las imágenes de MRI, deberá entrenar un modelo que permita clasificar las imágenes en una de las tres categorías de tumor.
+2.	Clasificación del tratamiento del paciente: Combinando los datos de las imágenes médicas y de historia clínica, genere un modelo que permita clasificar el tratamiento para el paciente. 
+Construya una API (con el framework de Python que prefiera) el cuál reciba como entrada los datos del modelo (imagen y datos de historia clínica) y genere una respuesta con las predicciones del modelo: la clasificación de la imagen y el mejor tratamiento para el paciente. 
+4.	Propuesta para despliegue en producción de los modelos 
+
+Proponga una estrategia de despliegue del modelo en producción en la nube que incluya:
+
+-	Análisis del caso: Identifique los principales retos técnicos, riesgos y oportunidades potenciales; teniendo en cuenta la rápida evolución de las tecnologías en IA.
+-	Diseño de la solución: Proponga un diagrama de arquitectura con los recursos en la nube (preferiblemente Azure) y que integre:
+o	Ingesta de la información
+o	Preprocesamiento y validación de la calidad de los datos
+o	Almacenamiento en bases de datos
+o	Modelos de inteligencia artificial (entrenamiento, validación e implementación)
+o	Seguridad, interoperabilidad y escalabilidad
+-	Evaluación de la solución:
+o	¿Qué métricas usaría para evaluar el sistema?
+o	¿Qué propondría para enfrentar retos de sesgo, explicabilidad y validación clínica?
+o	¿Qué estrategias propondría para mitigar riesgos éticos, técnicos y regulatorios?
+
+5.	Entregables mínimos esperados
+-	Repositorio público
+o	Notebook y versión html, con los pasos del proceso análisis descriptivo e inferencial (Pruebas de hipótesis),  feature engineering (preprocesamiento de imágenes y transformación de las variables) , entrenamiento y validación de los modelos 
+o	Funciones y clases construidas para el proceso de entrenamiento y validación producción y monitoreo deben estar como módulos (archivos .py con estructuras de inicialización)
+o	Script para construir la API de forma local y para consumir el pipeline completo de producción. Se debe definir la estructura y la documentación de la API
+o	README con la explicación de los mínimos para poder ejecutar cada una de las fases
+o	Archivo con los paquetes mínimos necesarios para ejecutar la solución (requirements.txt)
+-	Archivo de documentación 
+o	Diagramas, pantallazos, imágenes con las explicación y justificación de las soluciones a cada uno de los puntos.
+
+6.	Presentación de los resultados
+En caso de que tu reto avance en el proceso serás citado a la sustentación con previo aviso, esto implica preparar una presentación de 20 minutos donde presentes los resultados del reto práctico, la propuesta de despliegue en producción, los resultados obtenidos y las conclusiones. 
+
+Aclaraciones
+-	El reto está pensado para que pueda correrse en máquina local con la capacidad de cómputo de una máquina promedio, los planteamientos que requieran uso de recursos en la nube son teóricos y sólo deberá describirlos tienen el fin de entender el entendimiento de los conceptos.
+-	El código debe ser reproducible.
+-	El lenguaje de programación es Python.

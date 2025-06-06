@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+torch       
+torchvision
+huggingface_hub
+pillow
